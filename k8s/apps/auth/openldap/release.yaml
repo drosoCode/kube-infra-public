@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: auth
+  name: ldap-db
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100M
+  storageClassName: nfs-docker
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: auth
+  name: ldap-config
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50M
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: auth
+  name: openldap
+  labels:
+    app: openldap
+spec:
+  selector:
+    matchLabels:
+      app: openldap
+  template:
+    metadata:
+      labels:
+        app: openldap
+        np-ingress-controller-web: allow
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: openldap
+          image: osixia/openldap:latest
+          resources:
+            requests:
+              memory: 100M
+          ports:
+            - name: ldap
+              containerPort: 389
+          env:
+            - name: LDAP_RFC2307BIS_SCHEMA
+              value: "true"
+            - name: LDAP_BACKEND
+              value: mdb
+            - name: LDAP_REPLICATION
+              value: "false"
+            - name: LDAP_ORGANISATION
+              value: REDACTED
+            - name: LDAP_DOMAIN
+              value: REDACTED.net
+            - name: LDAP_TLS
+              value: "false"
+            - name: KEEP_EXISTING_CONFIG
+              value: "false"
+          volumeMounts:
+            - mountPath: /var/lib/ldap
+              name: ldap-db
+              readOnly: false
+            - name: ldap-config
+              readOnly: false
+              mountPath: /etc/ldap/slapd.d
+
+        - name: phpldapadmin
+          image: osixia/phpldapadmin:latest
+          resources:
+            requests:
+              memory: 10M
+          ports:
+            - name: web
+              containerPort: 80
+          # login with: cn=admin,dc=droso,dc=io
+          env:
+            - name: PHPLDAPADMIN_LDAP_HOSTS
+              value: "localhost"
+            - name: PHPLDAPADMIN_HTTPS
+              value: "false"
+      volumes:
+        - name: ldap-config
+          persistentVolumeClaim:
+            claimName: ldap-config
+        - name: ldap-db
+          persistentVolumeClaim:
+            claimName: ldap-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap
+  namespace: auth
+spec:
+  ports:
+    - protocol: TCP
+      name: ldap
+      port: 389
+  selector:
+    app: openldap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phpldapadmin
+  namespace: auth
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: openldap
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: phpldapadmin
+  namespace: auth
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`phpldapadmin.REDACTED`)
+      kind: Rule
+      services:
+        - name: phpldapadmin
+          port: 80
+  tls:
+    secretName: REDACTED-cert

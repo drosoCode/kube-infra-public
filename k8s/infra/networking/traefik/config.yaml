@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: kube-system
+data:
+  dynamic-conf.yaml: |-
+    http:
+      middlewares:
+        wol-prefix:
+          stripPrefix:
+            prefixes:
+              - "/wol"
+
+      routers:
+        wol:
+          rule: "Host(`remote.REDACTED`) && PathPrefix(`/wol`)"
+          middlewares:
+            - "wol-prefix"
+            - "auth-forwardauth-authelia@kubernetescrd"
+          entrypoints:
+            - websecure
+          service: wol
+          tls:
+            secretName: REDACTED-cert
+          
+        minecraft:
+          rule: "Host(`mc.REDACTED`)"
+          entrypoints:
+            - websecure
+          service: minecraft
+          tls:
+            secretName: REDACTED-cert
+
+      services:
+        wol:
+          loadBalancer:
+            servers:
+              - url: "http://192.168.1.33"
+
+        minecraft:
+          loadBalancer:
+            servers:
+              - url: "http://10.10.100.23:8123"

@@ -1,0 +1,49 @@
+- name: Setup backup
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Install rsync
+      apt:
+        name: rsync
+        state: present
+        # state: latest
+
+    - name: Install rclone
+      apt:
+        name: rclone
+        state: present
+        # state: latest
+
+    - name: Create identities directory if it does not exist
+      file:
+        path: /etc/ssh/identities
+        state: directory
+        mode: '0755'
+
+    - name: Write private keys
+      template:
+        src: templates/file.j2
+        dest: /etc/ssh/identities/REDACTED.key
+      vars:
+        file_path: secrets/REDACTED.key
+
+    #- name: Cron rsync
+    #  cron:
+    #    name: rsync
+    #    day: "2"
+    #    minute: "0"
+    #    hour: "3"
+    #    user: root
+    #    job: rsync --verbose --log-file="/var/log/rsync.log" --rsh "ssh -o IdentitiesOnly=yes -p 220 -i '/etc/ssh/identities/REDACTED.key'" --archive --no-perms --no-group --no-owner --delete --exclude="/srv/data/Homes/Thomas/Documents/Backups/Games" "/srv/data/Homes/" "system@REDACTED.REDACTED.net:/volume1/NetBackup/homes" &
+    #    cron_file: backup
+
+    - name: Cron backup docker
+      cron:
+        name: rsync
+        day: "1"
+        minute: "0"
+        hour: "3"
+        user: root
+        job: rsync --log-file="/var/log/rsync_docker.log" --archive --no-perms --no-group --no-owner --delete --exclude="log*" --exclude="/srv/cache/docker-data/home-hass-data/custom_components"  --exclude="/srv/cache/docker-data/home-hass-data/tts" "/srv/cache/docker-data" "/srv/data/infra/docker" &
+        cron_file: backup

@@ -1,0 +1,37 @@
+# -> ldap.auth.svc.cluster.local (np-ldap)
+# -> *.duosecurity.com (here)
+# -> postgres.storage.svc.cluster.local (np-postgres)
+# <- traefik (np-ingress-controller-web)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-authelia-duo-auth-out
+spec:
+  endpointSelector:
+    matchLabels:
+      app: authelia
+  egress:
+  - toFQDNs:
+    - matchPattern: "*.duosecurity.com"
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+---
+# gitea -> authelia
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-authelia-gitea-in
+spec:
+  podSelector:
+    matchLabels:
+      app: authelia
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gitea
+          namespaceSelector: {}

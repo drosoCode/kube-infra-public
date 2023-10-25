@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-zogwine-downloader-in
+spec:
+  podSelector:
+    matchLabels:
+      app: zogwine
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: media
+          podSelector:
+            matchLabels:
+              app: downloader
+      ports:
+        - protocol: TCP
+          port: web

@@ -1,0 +1,5 @@
+namespace: metallb-system
+resources:
+  - namespace.yaml
+  - helm.yaml
+

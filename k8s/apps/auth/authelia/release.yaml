@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authelia-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100M
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: auth
+  name: authelia
+  labels:
+    app: authelia
+spec:
+  selector:
+    matchLabels:
+      app: authelia
+  template:
+    metadata:
+      labels:
+        app: authelia
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-ldap: allow
+        np-metrics: allow
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9959"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: authelia
+          image: authelia/authelia:4
+          resources:
+            requests:
+              memory: 1G
+          command:
+            - authelia
+          args:
+            - '--config=/app/configuration.yaml'
+            - '--config=/app/configuration.oidc.yaml'
+          ports:
+            - name: web
+              containerPort: 9091
+            - name: metrics
+              containerPort: 9959
+          env:
+            - name: AUTHELIA_DUO_API_SECRET_KEY_FILE
+              value: /app/secrets/DUO_SECRET_KEY
+            - name: AUTHELIA_JWT_SECRET_FILE
+              value: /app/secrets/JWT_SECRET
+            - name: AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
+              value: /app/secrets/LDAP_PASSWORD
+            - name: AUTHELIA_SESSION_REDIS_PASSWORD_FILE
+              value: /app/secrets/REDIS_PASSWORD
+            - name: AUTHELIA_SESSION_SECRET_FILE
+              value: /app/secrets/SESSION_SECRET
+            - name: AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE
+              value: /app/secrets/SMTP_PASSWORD
+            - name: AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE
+              value: /app/secrets/STORAGE_ENCRYPTION_KEY
+            - name: AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE
+              value: /app/secrets/STORAGE_PASSWORD
+          volumeMounts:
+            - mountPath: /app/secrets
+              name: secrets
+              readOnly: true
+            - name: config
+              readOnly: true
+              mountPath: /app/configuration.yaml
+              subPath: configuration.yaml
+            - name: config-oidc
+              readOnly: true
+              mountPath: /app/configuration.oidc.yaml
+              subPath: configuration.oidc.yaml
+        - name: redis
+          image: redis:alpine
+          resources:
+            requests:
+              memory: 10M
+          ports:
+            - name: redis
+              containerPort: 6379
+          args:
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+          env:
+          - name: MASTER
+            value: "true"
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: authelia-secrets
+                key: REDIS_PASSWORD
+          volumeMounts:
+            - mountPath: /data
+              name: authelia-cache
+      volumes:
+        - name: secrets
+          secret:
+            secretName: authelia-secrets
+            items:
+              - key: DUO_SECRET_KEY
+                path: DUO_SECRET_KEY
+              - key: JWT_SECRET
+                path: JWT_SECRET
+              - key: REDIS_PASSWORD
+                path: REDIS_PASSWORD
+              - key: SESSION_SECRET
+                path: SESSION_SECRET
+              - key: SMTP_PASSWORD
+                path: SMTP_PASSWORD
+              - key: STORAGE_ENCRYPTION_KEY
+                path: STORAGE_ENCRYPTION_KEY
+              - key: STORAGE_PASSWORD
+                path: STORAGE_PASSWORD
+              - key: LDAP_PASSWORD
+                path: LDAP_PASSWORD
+
+        - name: config-oidc
+          secret:
+            secretName: authelia-oidc
+        - name: config
+          configMap:
+            name: authelia-config
+
+        - name: authelia-cache
+          persistentVolumeClaim:
+            claimName: authelia-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authelia
+  namespace: auth
+spec:
+  ports:
+    - protocol: TCP
+      name: authelia
+      port: 9091
+  selector:
+    app: authelia
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authelia
+  namespace: auth
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`auth.REDACTED`)
+      kind: Rule
+      services:
+        - name: authelia
+          port: 9091
+  tls:
+    secretName: REDACTED-cert

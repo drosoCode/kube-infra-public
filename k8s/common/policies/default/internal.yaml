@@ -1,0 +1,18 @@
+# allow access to traefik ssl terminated endpoints
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-gitea-runner-secure-out
+spec:
+  endpointSelector:
+    matchLabels:
+      np-internal: allow
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        "k8s:io.kubernetes.pod.namespace": kube-system
+        "app.kubernetes.io/name": traefik
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: ANY

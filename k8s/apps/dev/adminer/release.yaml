@@ -1,0 +1,60 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: dev
+  name: adminer
+  labels:
+    app: adminer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adminer
+  template:
+    metadata:
+      labels:
+        app: adminer
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-mysql: allow
+    spec:
+      containers:
+        - name: adminer
+          image: adminer:latest
+          ports:
+            - name: web
+              containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adminer
+  namespace: dev
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: adminer
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: igr-adminer
+  namespace: dev
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`adminer.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: adminer
+          port: 8080
+  tls:
+    secretName: REDACTED-cert
+# postgres.storage.svc.cluster.local:5432

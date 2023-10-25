@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photoprism-config
+data:
+  PHOTOPRISM_ADMIN_PASSWORD: "insecure"          # !!! CHANGE YOUR INITIAL "admin" PASSWORD, MINIMUM 8 CHARACTERS !!!
+  PHOTOPRISM_SITE_URL: "https://photoprism.REDACTED/"  # public server URL incl http:// or https:// and /path, :port is optional
+  PHOTOPRISM_ORIGINALS_LIMIT: "5000"               # file size limit for originals in MB (increase for high-res video)
+  PHOTOPRISM_HTTP_COMPRESSION: "gzip"            # improves transfer speed and bandwidth utilization (none or gzip)
+  PHOTOPRISM_LOG_LEVEL: "info"                   # log level: trace, debug, info, warning, error, fatal, or panic
+  PHOTOPRISM_PUBLIC: "true"                     # no authentication required (disables password protection)
+  PHOTOPRISM_READONLY: "false"                   # do not modify originals directory (reduced functionality)
+  PHOTOPRISM_EXPERIMENTAL: "false"               # enables experimental features
+  PHOTOPRISM_DISABLE_CHOWN: "true"              # disables storage permission updates on startup
+  PHOTOPRISM_DISABLE_WEBDAV: "true"             # disables built-in WebDAV server
+  PHOTOPRISM_DISABLE_SETTINGS: "false"           # disables settings UI and API
+  PHOTOPRISM_DISABLE_TENSORFLOW: "false"         # disables all features depending on TensorFlow
+  PHOTOPRISM_DISABLE_FACES: "false"              # disables facial recognition
+  PHOTOPRISM_DISABLE_CLASSIFICATION: "false"     # disables image classification
+  PHOTOPRISM_DISABLE_RAW: "true"                # disables indexing and conversion of RAW files
+  PHOTOPRISM_DETECT_NSFW: "false"                # flag photos as private that MAY be offensive (requires TensorFlow)
+  PHOTOPRISM_DATABASE_DRIVER: "mysql"            # use MariaDB 10.5+ or MySQL 8+ instead of SQLite for improved performance
+  PHOTOPRISM_DATABASE_SERVER: "mysql.storage.svc.cluster.local"     # MariaDB or MySQL database server (hostname:port)
+  PHOTOPRISM_DATABASE_NAME: "photoprism"         # MariaDB or MySQL database schema name
+  ## Run/install on first startup (options: update, gpu, tensorflow, davfs, clitools, clean):
+  PHOTOPRISM_INIT: "gpu tensorflow"
+  ## Start as a non-root user (see https://docs.docker.com/engine/reference/run/#user)
+  user: "1000:1000"

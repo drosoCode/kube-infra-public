@@ -1,0 +1,49 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-instagram
+  labels:
+    app: matrix-instagram
+spec:
+  selector:
+    matchLabels:
+      app: matrix-instagram
+  template:
+    metadata:
+      labels:
+        app: matrix-instagram
+        np-matrix: allow
+        np-internet: allow
+        np-postgres: allow
+    spec:
+      containers:
+        - name: matrix-instagram
+          image: dock.mau.dev/mautrix/instagram:latest
+          ports:
+            - name: appservice
+              containerPort: 29330
+          volumeMounts:
+            - mountPath: /data/config.yaml
+              subPath: config.yaml
+              name: matrix-instagram-config
+              readOnly: true
+            - mountPath: /data/registration.yaml
+              subPath: registration.yaml
+              name: matrix-instagram-config
+              readOnly: true
+      volumes:
+        - name: matrix-instagram-config
+          secret:
+            secretName: matrix-instagram-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-instagram
+spec:
+  ports:
+    - protocol: TCP
+      name: appservice
+      port: 29330
+  selector:
+    app: matrix-instagram

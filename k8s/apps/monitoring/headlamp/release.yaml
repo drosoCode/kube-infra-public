@@ -1,0 +1,61 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: headlamp
+spec:
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+        np-ingress-controller-web: allow
+        np-internal: allow # for oidc
+    spec:
+      containers:
+      - name: headlamp
+        image: ghcr.io/headlamp-k8s/headlamp:latest
+        args:
+          - "-in-cluster"
+          - "-plugins-dir=/headlamp/plugins"
+        envFrom:
+          - secretRef:
+              name: headlamp-secrets
+        ports:
+          - name: web
+            containerPort: 4466
+        livenessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /
+            port: 4466
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+spec:
+  selector:
+    app: headlamp
+  ports:
+    - port: 4466
+      name: web
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`k8s.REDACTED`)
+      kind: Rule
+      services:
+        - name: headlamp
+          port: 4466
+  tls:
+    secretName: REDACTED-cert

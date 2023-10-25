@@ -1,0 +1,29 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infra-networking
+  namespace: flux-system
+spec:
+  serviceAccountName: kustomize-controller
+  interval: 1h
+  path: ./k8s/infra/networking
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  prune: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infra-networking-config
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infra-networking
+  serviceAccountName: kustomize-controller
+  interval: 1m
+  path: ./k8s/infra/networking/config
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  prune: true

@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: librenms-data
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-docker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: librenms
+  labels:
+    app: librenms
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: librenms
+  template:
+    metadata:
+      labels:
+        app: librenms
+        np-ingress-controller-web: allow
+        np-local-lan: allow
+        np-local-server: allow
+        np-local-iot: allow
+        np-mysql: allow
+        np-metrics: allow
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9091"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: librenms
+          image: librenms/librenms:latest
+          env:
+            - name: LISTEN_IPV6
+              value: "false"
+            - name: LIBRENMS_WEATHERMAP
+              value: "true"
+            - name: LIBRENMS_SERVICE_POLLER_WORKERS
+              value: "8"
+            - name: LIBRENMS_SERVICE_SERVICES_WORKERS
+              value: "8"
+            - name: DB_HOST
+              value: mysql.storage.svc.cluster.local
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: librenms
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: librenms-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: librenms-secrets
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: librenms-config
+              mountPath: /opt/librenms/config.php
+              subPath: config.php
+            - name: librenms-data
+              mountPath: /data
+          ports:
+            - name: web
+              containerPort: 8000
+        - name: librenms-dispatcher
+          image: librenms/librenms:latest
+          env:
+            - name: DISPATCHER_NODE_ID
+              value: dispatcher1
+            - name: REDIS_HOST
+              value: localhost
+            - name: REDIS_PORT
+              value: "6379"
+            - name: SIDECAR_DISPATCHER
+              value: "1"
+            - name: DB_HOST
+              value: mysql.storage.svc.cluster.local
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: librenms
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: librenms-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: librenms-secrets
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: librenms-data
+              mountPath: /data
+        - name: redis
+          image: redis:alpine
+        - name: prometheus-push
+          image: prom/pushgateway
+          ports:
+            - name: metrics
+              containerPort: 9091
+      volumes:
+        - name: librenms-config
+          configMap:
+            defaultMode: 0777
+            name: librenms-config
+        - name: librenms-data
+          persistentVolumeClaim:
+            claimName: librenms-data
+        - name: librenms-scrape-config
+          secret:
+            secretName: librenms-scrape-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: librenms
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8000
+  selector:
+    app: librenms
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: librenms
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`nms.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: librenms
+          port: 8000
+  tls:
+    secretName: REDACTED-cert

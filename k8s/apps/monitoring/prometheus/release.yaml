@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        np-ingress-controller-web: allow
+        quoi: coubeh
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus
+          args:
+            - "--storage.tsdb.retention.time=24h"
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/data/"
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/
+            - name: prometheus-scrape-config
+              mountPath: /etc/prometheus/scrape
+            - name: prometheus-storage
+              mountPath: /data/
+          ports:
+            - name: web
+              containerPort: 9090
+      volumes:
+        - name: prometheus-config
+          configMap:
+            defaultMode: 420
+            name: prometheus
+        - name: prometheus-storage
+          persistentVolumeClaim:
+            claimName: prometheus-data
+        - name: prometheus-scrape-config
+          secret:
+            secretName: prometheus-scrape-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 9090
+  selector:
+    app: prometheus
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: prometheus
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`prom.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: prometheus
+          port: 9090
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: freshrss-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500M
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: freshrss
+  labels:
+    app: freshrss
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: freshrss
+  template:
+    metadata:
+      labels:
+        app: freshrss
+        np-ingress-controller-web: allow
+        np-mysql: allow
+        np-internet: allow # to read feeds
+    spec:
+      containers:
+        - name: freshrss
+          image: linuxserver/freshrss:1.21.0
+          ports:
+            - name: web
+              containerPort: 80
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: Europe/Paris
+          volumeMounts:
+            - mountPath: /config/www/freshrss/data
+              subPath: data
+              name: freshrss-data
+            - mountPath: /config/www/freshrss/extensions
+              subPath: extensions
+              name: freshrss-data
+            - name: freshrss-config
+              readOnly: true
+              mountPath: /config/www/freshrss/data/config.php
+              subPath: config.php
+      volumes:
+        - name: freshrss-data
+          persistentVolumeClaim:
+            claimName: freshrss-data
+        - name: freshrss-config
+          secret:
+            secretName: freshrss-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: freshrss
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: freshrss
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: freshrss
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`rss.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: freshrss
+          port: 80
+  tls:
+    secretName: REDACTED-cert

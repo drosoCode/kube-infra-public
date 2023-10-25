@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: REDACTED-cert
+  namespace: cert-manager
+spec:
+  commonName: "*.REDACTED"
+  dnsNames:
+    - "REDACTED"
+    - "*.REDACTED"
+  issuerRef:
+    name: cloudflare-le-prod
+    kind: Issuer
+  secretName: REDACTED-cert
+  secretTemplate:
+    annotations:
+      #replicator.v1.mittwald.de/replicate-to: "my-ns-1,namespace-[0-9]*"
+      replicator.v1.mittwald.de/replicate-to: ".*"

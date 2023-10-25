@@ -1,0 +1,57 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: readerstore
+  labels:
+    app: readerstore
+spec:
+  selector:
+    matchLabels:
+      app: readerstore
+  template:
+    metadata:
+      labels:
+        app: readerstore
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: readerstore
+          image: git.REDACTED/droso/readerstore
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+            - mountPath: /data
+              subPath: Thomas/Livres
+              name: nas-user-data
+              readOnly: true
+      volumes:
+        - name: nas-user-data
+          persistentVolumeClaim:
+            claimName: nas-user-data-media
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: readerstore
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: readerstore
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: readerstore
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`readerstore.sony.com`)
+      kind: Rule
+      services:
+        - name: readerstore
+          port: 8080

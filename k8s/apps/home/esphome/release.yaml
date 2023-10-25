@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: esphome-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: esphome
+  labels:
+    app: esphome
+spec:
+  selector:
+    matchLabels:
+      app: esphome
+  template:
+    metadata:
+      labels:
+        app: esphome
+        np-ingress-controller-web: allow
+        np-internet: allow # to download compiler/libs
+        np-local-iot: allow # to connect to esp
+    spec:
+      containers:
+        - name: esphome
+          image: esphome/esphome:latest
+          ports:
+            - name: web
+              containerPort: 6052
+          env:
+            - name: TZ
+              value: Europe/Paris
+            - name: ESPHOME_DASHBOARD_USE_PING
+              value: "true"
+          volumeMounts:
+            - name: esphome-data
+              mountPath: /config
+      volumes:
+        - name: esphome-data
+          persistentVolumeClaim:
+            claimName: esphome-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: esphome
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 6052
+  selector:
+    app: esphome
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: esphome
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`esphome.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: esphome
+          port: 6052
+  tls:
+    secretName: REDACTED-cert

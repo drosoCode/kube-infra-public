@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: librenms-config
+data:
+  config.php: |-
+    <?php
+
+    // This is the user LibreNMS will run as
+    $config['user'] = 'librenms';
+
+    $config['snmp']['community'] = array('public');
+    $config['auth_mechanism']        = "sso";
+    $config['auth_logout_handler'] = 'https://auth.REDACTED/logout';
+    $config['sso']['mode']           = "env";
+    $config['sso']['create_users'] = true;
+    $config['sso']['update_users'] = true;
+    $config['sso']['user_attr'] = 'HTTP_REMOTE_USER'; // not needed since user_attr is already REMOTE_USER 
+    $config['sso']['realname_attr'] = 'HTTP_REMOTE_NAME';
+    $config['sso']['email_attr'] = 'HTTP_REMOTE_EMAIL';
+    $config['sso']['group_attr'] = 'HTTP_REMOTE_GROUPS';
+    $config['sso']['group_strategy'] = 'map';
+    $config['sso']['group_delimiter'] = ',';
+    $config['sso']['group_level_map'] = ['monitoring-admin' => 10];
+
+    $config['rrd_purge'] = 0;
+    $config['enable_billing'] = 0;
+    $config['show_services'] = 0;
+    foreach (glob("/data/config/*.php") as $filename) include $filename;
+    foreach (glob("/opt/librenms/config.d/*.php") as $filename) include $filename;

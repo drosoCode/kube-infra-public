@@ -1,0 +1,6 @@
+keys.txt
+secrets.txt
+.terraform/
+*.tfstate*
+kubeconfig
+talosconfig

@@ -1,0 +1,68 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gitea-runner-1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gitea-runner
+  name: gitea-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea-runner
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: gitea-runner
+        np-internet: allow
+        np-internal: allow # for https registry access
+    status:
+      qosClass: Guaranteed
+    spec:
+      volumes:
+      - name: docker-daemon-socket
+        emptyDir: {}
+      - name: runner-data
+        persistentVolumeClaim:
+          claimName: gitea-runner-1
+      containers:
+      - name: runner
+        image: gitea/act_runner:nightly
+        #command: ["sh", "-c", "while ! nc -z localhost 2376 </dev/null; do echo 'waiting for docker daemon...'; sleep 5; done; /sbin/tini -- /opt/act/run.sh"]
+        command: ["sh", "-c", "chmod 766 /run/docker.sock; /sbin/tini -- /opt/act/run.sh"]
+        env:
+        - name: DOCKER_HOST
+          value: unix:///var/run/docker.sock
+        - name: GITEA_INSTANCE_URL
+          value: http://gitea.dev.svc.cluster.local:3000
+        - name: GITEA_RUNNER_REGISTRATION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gitea-runner-secret
+              key: token_1
+        - name: GITEA_RUNNER_LABELS
+          value: ubuntu-latest:docker://catthehacker/ubuntu:runner-22.04,ubuntu-22.04:docker://catthehacker/ubuntu:runner-22.04,ubuntu-20.04:docker://catthehacker/ubuntu:runner-20.04
+        volumeMounts:
+        - name: docker-daemon-socket
+          mountPath: /var/run
+        - name: runner-data
+          mountPath: /data
+      - name: daemon
+        image: docker:23.0.6-dind
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: docker-daemon-socket
+          mountPath: /var/run

@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-downloader-out
+spec:
+  podSelector:
+    matchLabels:
+      app: downloader
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: media
+        podSelector:
+          matchLabels:
+            app: qbittorrent
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: media
+        podSelector:
+          matchLabels:
+            app: zogwine
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: services
+        podSelector:
+          matchLabels:
+            app: matrix-webhook
+

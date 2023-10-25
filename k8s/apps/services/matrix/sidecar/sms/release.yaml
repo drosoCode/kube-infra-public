@@ -1,0 +1,104 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-sms
+  labels:
+    app: matrix-sms
+spec:
+  selector:
+    matchLabels:
+      app: matrix-sms
+  template:
+    metadata:
+      labels:
+        app: matrix-sms
+        np-matrix: allow
+        np-internet: allow
+        np-postgres: allow
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: wsproxy
+          image: dock.mau.dev/mautrix/wsproxy
+          ports:
+            - name: web
+              containerPort: 29331
+          env:
+            - name: LISTEN_ADDRESS
+              value: ":29331"
+            - name: SYNC_PROXY_URL
+              value: "http://localhost:29332"
+            - name: SYNC_PROXY_WSPROXY_URL
+              value: "http://localhost:29331"
+            - name: APPSERVICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: WSP_APPSERVICE_ID
+            - name: AS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: WSP_AS_TOKEN
+            - name: HS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: WSP_HS_TOKEN
+            - name: SYNC_PROXY_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: WSP_SYNC_PROXY_SHARED_SECRET
+
+        - name: syncproxy
+          image: dock.mau.dev/mautrix/syncproxy
+          ports:
+            - name: syncproxy
+              containerPort: 29332
+          env:
+            - name: LISTEN_ADDRESS
+              value: ":29332"
+            - name: HOMESERVER_URL
+              value: "http://matrix.services.svc.cluster.local:8008"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: SP_DATABASE_URL
+            - name: SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-sms-secrets
+                  key: SP_SHARED_SECRET
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-sms
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 29331
+    - protocol: TCP
+      name: syncproxy
+      port: 29332
+  selector:
+    app: matrix-sms
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: matrix-sms
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`matrixws.REDACTED`)
+      kind: Rule
+      services:
+        - name: matrix-sms
+          port: 29331
+  tls:
+    secretName: REDACTED-cert

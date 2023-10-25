@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lms-hass-in
+spec:
+  podSelector:
+    matchLabels:
+      app: lms
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: hass
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: home
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-lms-world-in
+spec:
+  endpointSelector:
+    matchLabels:
+      app: lms
+  ingress:
+  - fromEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "3483"
+

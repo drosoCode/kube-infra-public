@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: igr-dashboard-traefik
+  namespace: kube-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`traefik.REDACTED`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      kind: Rule
+      services:
+        - kind: TraefikService
+          name: api@internal
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+  tls:
+    secretName: REDACTED-cert

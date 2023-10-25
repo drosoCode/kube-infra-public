@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-matrix-webhook-in
+spec:
+  podSelector:
+    matchLabels:
+      app: matrix-webhook
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: downloader
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: media
+      - podSelector:
+          matchLabels:
+            app: grafana
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring
+      - podSelector:
+          matchLabels:
+            app: gitea
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: dev
+      - podSelector:
+          matchLabels:
+            app: sonarqube
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: dev

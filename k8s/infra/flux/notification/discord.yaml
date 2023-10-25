@@ -1,0 +1,36 @@
+apiVersion: notification.toolkit.fluxcd.io/v1beta2
+kind: Provider
+metadata:
+  name: discord
+  namespace: flux-system
+spec:
+  type: discord
+  secretRef:
+    name: discord-webhook
+---
+apiVersion: notification.toolkit.fluxcd.io/v1beta2
+kind: Alert
+metadata:
+  name: discord-info
+  namespace: flux-system
+spec:
+  providerRef:
+    name: discord
+  eventSeverity: info
+  eventSources:
+    - kind: Bucket
+      name: '*'
+    - kind: GitRepository
+      name: '*'
+    - kind: HelmChart
+      name: '*'
+    - kind: HelmRelease
+      name: '*'
+    - kind: HelmRepository
+      name: '*'
+    - kind: OCIRepository
+      name: '*'
+    - kind: Kustomization
+      name: '*'
+  exclusionList:
+    - "^Dependencies do not meet ready condition.*"

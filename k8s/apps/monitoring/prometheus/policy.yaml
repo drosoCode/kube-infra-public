@@ -1,0 +1,67 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-out
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+      - namespaceSelector:
+          matchExpressions:
+            - key: kubernetes.io/metadata.name
+              operator: In
+              values:
+                - kube-system
+                - metallb-system
+                - flux-system
+                - cert-manager
+                - cilium-system
+---
+# allow access to cluster hosts
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-prometheus-apiserver-out
+spec:
+  endpointSelector:
+    matchLabels:
+      app: prometheus
+  egress:
+  - toEntities:
+    - cluster
+    toPorts:
+    - ports:
+      - port: "6443" # apiserver (autodiscovery)
+        protocol: TCP
+      - port: "9965" # hubble
+        protocol: TCP
+      - port: "9964" # cilium monitoring
+      - port: "9962" # cilium agent
+        protocol: TCP
+---
+# allow grafana to connect
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-grafana-in
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: grafana
+      ports:
+        - protocol: TCP
+          port: web

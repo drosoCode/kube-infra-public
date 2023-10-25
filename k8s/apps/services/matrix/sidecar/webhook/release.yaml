@@ -1,0 +1,61 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-webhook
+  labels:
+    app: matrix-webhook
+spec:
+  selector:
+    matchLabels:
+      app: matrix-webhook
+  template:
+    metadata:
+      labels:
+        app: matrix-webhook
+        np-matrix: allow
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: matrix-webhook
+          image: ghcr.io/drosocode/matrix-webhook:latest
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+            - mountPath: /data/config.yaml
+              subPath: config.yaml
+              name: matrix-webhook-config
+              readOnly: true
+      volumes:
+        - name: matrix-webhook-config
+          secret:
+            secretName: matrix-webhook-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-webhook
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: matrix-webhook
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: matrix-webhook
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`matrixwh.REDACTED`)
+      kind: Rule
+      services:
+        - name: matrix-webhook
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

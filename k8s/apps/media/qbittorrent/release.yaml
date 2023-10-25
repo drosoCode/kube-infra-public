@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qbittorrent-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: qbittorrent
+  labels:
+    app: qbittorrent
+spec:
+  selector:
+    matchLabels:
+      app: qbittorrent
+  template:
+    metadata:
+      labels:
+        app: qbittorrent
+        np-ingress-controller-web: allow
+        np-internet: allow # for download
+        np-metrics: allow
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: qbittorrent
+          image: git.REDACTED/droso/qbittorrent:latest
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+            - mountPath: /config
+              name: qbittorrent-data
+              readOnly: false
+            - mountPath: /downloads
+              subPath: Downloads/
+              name: nas-media-data
+              readOnly: false
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: Europe/Paris
+
+        - name: exporter
+          image: git.REDACTED/droso/qbittorrent_exporter:latest
+          env:
+            - name: QBITTORRENT_HOST
+              value: localhost
+            - name: QBITTORRENT_PORT
+              value: "8080"
+          ports:
+            - name: metrics
+              containerPort: 8000
+      volumes:
+        - name: nas-media-data
+          persistentVolumeClaim:
+            claimName: nas-media-data-media
+        - name: qbittorrent-data
+          persistentVolumeClaim:
+            claimName: qbittorrent-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: qbittorrent
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: qbittorrent
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`torrent.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: qbittorrent
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

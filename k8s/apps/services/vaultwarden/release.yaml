@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500M
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: vaultwarden
+  labels:
+    app: vaultwarden
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vaultwarden
+  template:
+    metadata:
+      labels:
+        app: vaultwarden
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-internet: allow # to fetch icons
+    spec:
+      containers:
+        - name: vaultwarden
+          image: vaultwarden/server:latest
+          resources:
+            requests:
+              memory: 2G
+          ports:
+            - name: web
+              containerPort: 80
+          env:
+            - name: WEBSOCKET_ENABLED
+              value: "false"
+            - name: SIGNUPS_ALLOWED
+              value: "false"
+            - name: INVITATIONS_ALLOWED
+              value: "false"
+            - name: DOMAIN
+              value: https://pwd.droso.io
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-secrets
+                  key: DATABASE_URL
+          volumeMounts:
+            - mountPath: /data
+              name: vaultwarden-data
+              readOnly: false
+      volumes:
+        - name: vaultwarden-data
+          persistentVolumeClaim:
+            claimName: vaultwarden-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vaultwarden
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: vaultwarden
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: vaultwarden
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`pwd.REDACTED`)
+      kind: Rule
+      services:
+        - name: vaultwarden
+          port: 80
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lms-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: lms
+  labels:
+    app: lms
+spec:
+  selector:
+    matchLabels:
+      app: lms
+  template:
+    metadata:
+      labels:
+        app: lms
+        np-ingress-controller-web: allow
+        np-internet: allow # for scrapers
+    spec:
+      containers:
+        - name: lms
+          image: git.REDACTED/droso/lms:latest
+          ports:
+            - name: web
+              containerPort: 9000
+            - name: squeezebox
+              containerPort: 3483
+          volumeMounts:
+            - mountPath: /mnt/state
+              name: lms-data
+              readOnly: false
+            - mountPath: /mnt/music
+              subPath: Thomas/Musique
+              name: nas-user-data
+              readOnly: true
+          env:
+            - name: TZ
+              value: Europe/Paris
+      volumes:
+        - name: nas-user-data
+          persistentVolumeClaim:
+            claimName: nas-user-data-media
+        - name: lms-data
+          persistentVolumeClaim:
+            claimName: lms-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 9000
+  selector:
+    app: lms
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: lms
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`lms.REDACTED`)
+      kind: Rule
+      services:
+        - name: lms
+          port: 9000
+  tls:
+    secretName: REDACTED-cert
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-lb
+  annotations:
+    metallb.universe.tf/allow-shared-ip: lan
+spec:
+  ports:
+    - protocol: TCP
+      name: squeezebox
+      port: 3483
+    - protocol: UDP
+      name: squeezebox-udp
+      port: 3483
+  selector:
+    app: lms
+  type: LoadBalancer

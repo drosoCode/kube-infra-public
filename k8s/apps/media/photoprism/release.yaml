@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: photoprism-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: photoprism
+  labels:
+    app: photoprism
+spec:
+  selector:
+    matchLabels:
+      app: photoprism
+  template:
+    metadata:
+      labels:
+        app: photoprism
+        np-ingress-controller-web: allow
+        np-mysql: allow
+        np-internet: allow # for geocoding
+    spec:
+      containers:
+        - name: photoprism
+          image: photoprism/photoprism:latest
+          ports:
+            - name: web
+              containerPort: 2342
+          volumeMounts:
+            - mountPath: /photoprism/storage
+              name: photoprism-data
+              readOnly: false
+            - mountPath: /photoprism/originals
+              subPath: Thomas/Photos
+              name: nas-user-data
+              readOnly: true
+          envFrom:
+            - configMapRef:
+                name: photoprism-config
+          env:
+            - name: PHOTOPRISM_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: photoprism-secrets
+                  key: DATABASE_USER
+            - name: PHOTOPRISM_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: photoprism-secrets
+                  key: DATABASE_PASSWORD
+      volumes:
+        - name: nas-user-data
+          persistentVolumeClaim:
+            claimName: nas-user-data-media
+        - name: photoprism-data
+          persistentVolumeClaim:
+            claimName: photoprism-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photoprism
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 2342
+  selector:
+    app: photoprism
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: photoprism
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`photoprism.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: photoprism
+          port: 2342
+  tls:
+    secretName: REDACTED-cert

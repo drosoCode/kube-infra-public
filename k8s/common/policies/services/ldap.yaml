@@ -1,0 +1,22 @@
+# allow access to ldap server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ldap
+spec:
+  podSelector:
+    matchLabels:
+      np-ldap: allow
+  policyTypes:
+    - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: auth
+      podSelector:
+        matchLabels:
+          app: openldap
+    ports:
+      - protocol: TCP
+        port: ldap

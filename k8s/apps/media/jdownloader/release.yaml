@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jdownloader-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: jdownloader
+  labels:
+    app: jdownloader
+spec:
+  selector:
+    matchLabels:
+      app: jdownloader
+  template:
+    metadata:
+      labels:
+        app: jdownloader
+        np-internet: allow # for download
+    spec:
+      containers:
+        - name: jdownloader
+          image: jaymoulin/jdownloader
+          ports:
+            - name: api
+              containerPort: 3129
+          volumeMounts:
+            - mountPath: /opt/JDownloader/app
+              name: jdownloader-app
+            - mountPath: /opt/JDownloader/app/cfg
+              name: jdownloader-data
+            - mountPath: /opt/JDownloader/Downloads
+              subPath: Downloads/
+              name: nas-media-data
+          envFrom:
+            - secretRef:
+                name: jdownloader-secrets
+      volumes:
+        - name: nas-media-data
+          persistentVolumeClaim:
+            claimName: nas-media-data-media
+        - name: jdownloader-data
+          persistentVolumeClaim:
+            claimName: jdownloader-data
+        - name: jdownloader-app
+          emptyDir: {}

@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: filebrowser-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100M
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: filebrowser
+  labels:
+    app: filebrowser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: filebrowser
+  template:
+    metadata:
+      labels:
+        app: filebrowser
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        #command: config set --auth.method=proxy --auth.header=Remote-User
+        #command: config set --auth.method=json
+        - name: filebrowser
+          image: ghcr.io/drosocode/filebrowser:v2
+          ports:
+            - name: web
+              containerPort: 80
+          volumeMounts:
+            - mountPath: /database.db
+              subPath: database.db
+              name: filebrowser-data
+              readOnly: false
+            - mountPath: /srv/nas
+              name: nas-media-data
+              readOnly: true
+            - mountPath: /srv/thomas
+              subPath: Thomas/
+              name: nas-user-data
+              readOnly: false
+      volumes:
+        - name: filebrowser-data
+          persistentVolumeClaim:
+            claimName: filebrowser-data
+        - name: nas-media-data
+          persistentVolumeClaim:
+            claimName: nas-media-data-services
+        - name: nas-user-data
+          persistentVolumeClaim:
+            claimName: nas-user-data-services
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebrowser
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: filebrowser
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: filebrowser
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`cloud.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: filebrowser
+          port: 80
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,76 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vscode-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: vscode
+  labels:
+    app: vscode
+spec:
+  selector:
+    matchLabels:
+      app: vscode
+  template:
+    metadata:
+      labels:
+        app: vscode
+        np-ingress-controller-web: allow
+        np-internet: allow # for cloning
+    spec:
+      containers:
+        - name: vscode
+          image: codercom/code-server:latest
+          args: 
+            - "--auth"
+            - "none"
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+          - name: vscode-data
+            mountPath: /home/coder/project
+      volumes:
+      - name: vscode-data
+        persistentVolumeClaim:
+          claimName: vscode-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vscode
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: vscode
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: vscode
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`code.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: vscode
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

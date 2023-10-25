@@ -1,0 +1,42 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: downloader
+  labels:
+    app: downloader
+spec:
+  selector:
+    matchLabels:
+      app: downloader
+  template:
+    metadata:
+      labels:
+        app: downloader
+        np-internet: allow # to scrape rss
+    spec:
+      containers:
+        - name: downloader
+          image: git.REDACTED/droso/downloader
+          volumeMounts:
+            - mountPath: /home/OrigDir
+              name: nas-media-data
+              subPath: Downloads/
+              readOnly: false
+            - mountPath: /home/DestDir
+              name: nas-media-data
+              subPath: Videos/Series/
+              readOnly: false
+            - mountPath: /home/config/animes.yaml
+              subPath: animes.yaml
+              name: downloader-config
+              readOnly: true
+          env:
+            - name: TZ
+              value: Europe/Paris
+      volumes:
+        - name: nas-media-data
+          persistentVolumeClaim:
+            claimName: nas-media-data-media
+        - name: downloader-config
+          secret:
+            secretName: downloader-config

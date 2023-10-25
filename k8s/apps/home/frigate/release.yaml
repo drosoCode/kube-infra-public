@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: frigate-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: frigate
+  labels:
+    app: frigate
+spec:
+  selector:
+    matchLabels:
+      app: frigate
+  template:
+    metadata:
+      labels:
+        app: frigate
+        np-ingress-controller-web: allow
+        np-internet: allow # to download models
+        np-local-iot: allow # to access cams
+    spec:
+      containers:
+        - name: frigate
+          image: blakeblackshear/frigate:stable-amd64
+          ports:
+            - name: web
+              containerPort: 5000
+            - name: rtmp
+              containerPort: 1935
+          volumeMounts:
+            - name: frigate-config
+              mountPath: /config/config.yml
+              subPath: config.yml
+            - name: frigate-data
+              mountPath: /media/frigate
+              subPath: frigate
+            - name: tmp-data
+              mountPath: /media
+              subPath: frigate/
+            - name: dshm
+              mountPath: /dev/shm
+          env:
+            - name: TZ
+              value: Europe/Paris
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "all"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+          resources:
+            limits:
+              "nvidia.com/gpu": "1"
+
+        #- name: doubletake
+        #  image: jakowenko/double-take
+        #  ports:
+        #    - name: doubletake
+        #      containerPort: 3000
+        #  volumeMounts:
+        #    - name: doubletake-config
+        #      mountPath: /double-take/config.yml
+        #      subPath: config.yml
+        #    - name: frigate-data
+        #      mountPath: /.storage
+        #      subPath: doubletake
+        #    - name: tmp-data
+        #      mountPath: /media
+        #      subPath: frigate/
+        #  env:
+        #    - name: TZ
+        #      value: Europe/Paris
+
+      volumes:
+        - name: frigate-config
+          secret:
+            secretName: frigate-config
+        #- name: doubletake-config
+        #  secret:
+        #    secretName: doubletake-config
+        - name: frigate-data
+          persistentVolumeClaim:
+            claimName: frigate-data
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "1000000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frigate
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 5000
+  selector:
+    app: frigate
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frigate
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`frigate.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: frigate
+          port: 5000
+  tls:
+    secretName: REDACTED-cert

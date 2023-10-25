@@ -1,0 +1,28 @@
+kind: CronJob
+apiVersion: batch/v1
+metadata:
+  name: netbackup
+  labels:
+    app: netbackup
+spec:
+  schedule: "0 3 1 * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: netbackup
+            np-local-lan: allow
+        spec:
+          containers:
+            - name: netbackup
+              image: ghcr.io/drosocode/netbackup
+              volumeMounts:
+                - name: config
+                  readOnly: true
+                  mountPath: /app
+          volumes:
+            - name: config
+              secret:
+                secretName: netbackup-config
+          restartPolicy: Never

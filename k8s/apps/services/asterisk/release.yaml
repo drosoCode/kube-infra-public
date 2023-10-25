@@ -1,0 +1,42 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: asterisk
+  labels:
+    app: asterisk
+spec:
+  selector:
+    matchLabels:
+      app: asterisk
+  template:
+    metadata:
+      labels:
+        app: asterisk
+        np-local-lan: allow
+        np-local-server: allow
+    spec:
+      hostNetwork: true
+      nodeName: k8smaster
+      containers:
+        - name: asterisk
+          image: git.REDACTED/droso/asterisk:latest
+          volumeMounts:
+            - name: asterisk-config
+              mountPath: /etc/asterisk/rtp.conf
+              subPath: rtp.conf
+            - name: asterisk-config
+              mountPath: /etc/asterisk/extensions.conf
+              subPath: extensions.conf
+            - name: asterisk-config
+              mountPath: /etc/asterisk/sip.conf
+              subPath: sip.conf
+            - name: asterisk-secrets
+              mountPath: /etc/asterisk/sip.user.conf
+              subPath: sip.user.conf
+      volumes:
+        - name: asterisk-config
+          configMap:
+            name: asterisk-config
+        - name: asterisk-secrets
+          secret:
+            secretName: asterisk-secrets

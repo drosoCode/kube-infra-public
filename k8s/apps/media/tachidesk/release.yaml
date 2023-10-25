@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tachidesk-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: tachidesk
+  labels:
+    app: tachidesk
+spec:
+  selector:
+    matchLabels:
+      app: tachidesk
+  template:
+    metadata:
+      labels:
+        app: tachidesk
+        np-ingress-controller-web: allow
+        np-internet: allow # for download
+    spec:
+      containers:
+        - name: tachidesk
+          image: ghcr.io/suwayomi/tachidesk
+          ports:
+            - name: web
+              containerPort: 4567
+          volumeMounts:
+            - mountPath: /home/suwayomi/.local/share/Tachidesk
+              name: tachidesk-data
+              readOnly: false
+      volumes:
+        - name: tachidesk-data
+          persistentVolumeClaim:
+            claimName: tachidesk-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tachidesk
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 4567
+  selector:
+    app: tachidesk
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: tachidesk
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`tachidesk.REDACTED`)
+      kind: Rule
+      services:
+        - name: tachidesk
+          port: 4567
+  tls:
+    secretName: REDACTED-cert

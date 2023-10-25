@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# If any command fails, exit immediately with that command's exit status
+set -eo pipefail
+
+# Find all changed files for this commit
+# Compute the diff only once to save a small amount of time.
+CHANGED_FILES=$(git diff --name-only --cached --diff-filter=ACMR)
+EXIT=0
+
+for file in $CHANGED_FILES; do
+    if grep -qPi '^kind:\s+secret' "$file" && ! grep -q 'ENC\[AES256' "$file"; then
+        echo "Unencrypted k8s secret: $file"
+        EXIT=1
+    fi
+    if [[ "$file" == *"ansible/secrets/"* ]] && ! grep -q 'ENC\[AES256' "$file"; then
+        echo "Unencrypted ansible secret: $file"
+    fi
+done
+
+exit $EXIT

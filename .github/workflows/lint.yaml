@@ -1,0 +1,175 @@
+name: Lint
+on:
+  #push:
+  #  branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+
+  tflint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      name: Checkout source code
+
+    - uses: actions/cache@v3
+      name: Cache plugin dir
+      with:
+        path: ~/.tflint.d/plugins
+        key: ubuntu-latest-tflint-${{ hashFiles('.tflint.hcl') }}
+
+    - uses: terraform-linters/setup-tflint@v3
+      name: Setup TFLint
+      with:
+        tflint_version: v0.44.1
+
+    - name: Show version
+      run: tflint --version
+
+    - name: Init TFLint
+      run: tflint --init
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Run TFLint
+      run: tflint -f compact
+
+  tfsec:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: tfsec
+        uses: aquasecurity/tfsec-sarif-action@v0.1.0
+        with:
+          sarif_file: tfsec.sarif          
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tfsec
+          path: tfsec.sarif
+          retention-days: 1       
+
+  #kubelinter:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - name: Scan yamls
+  #      id: kube-lint-scan
+  #      uses: stackrox/kube-linter-action@v1
+  #      with:
+  #          directory: k8s
+  #          config: k8s/.kube-linter.yaml
+  #          format: sarif
+  #          output-file: kube-linter.sarif
+  #    - uses: actions/upload-artifact@v3
+  #      with:
+  #        name: kube-linter
+  #        path: kube-linter.sarif
+  #        retention-days: 1
+
+  kubescape:
+    runs-on: ubuntu-latest
+    permissions:
+        actions: read
+        contents: read
+        security-events: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: kubescape/github-action@main
+        continue-on-error: true
+        with:
+          format: sarif
+          outputFile: kubescape
+          files: "k8s/*.yaml"
+  
+      - uses: actions/upload-artifact@v3
+        with:
+          name: kubescape
+          path: kubescape.sarif
+          retention-days: 1
+
+  polaris:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - run: sudo apt-get update && sudo apt-get install -y aha
+
+    - name: Setup polaris
+      uses: fairwindsops/polaris/.github/actions/setup-polaris@master
+      with:
+        version: 5.0.0
+  
+    - name: Use command
+      run: polaris audit --audit-path ./k8s --format=pretty --config=./k8s/.polaris.yaml | aha > polaris.html
+      # --set-exit-code-on-danger --set-exit-code-below-score 90
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: polaris
+        path: polaris.html
+        retention-days: 1
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Trivy vulnerability scanner in IaC mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          hide-progress: false
+          format: 'sarif'
+          output: 'trivy.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: trivy
+          path: trivy.sarif
+          retention-days: 1
+        
+  infra:
+    runs-on: ubuntu-latest
+    needs: [tflint, tfsec]
+    steps:
+      - run: echo "done"
+
+  kube:
+    runs-on: ubuntu-latest
+    needs: [kubescape, polaris, trivy]
+    steps:
+      - run: echo "done"
+
+  sonar:
+    runs-on: ubuntu-latest
+    needs: [infra, kube]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Disabling shallow clone is recommended for improving relevancy of reporting
+          fetch-depth: 0
+
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v3
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
+        with:
+          args: >
+            -Dsonar.sarifReportPaths=kubescape/kubescape.sarif,trivy/trivy.sarif,tfsec/tfsec.sarif

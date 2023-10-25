@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bookmarks-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: nfs-docker
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bookmarks-chromium
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500M
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: bookmarks
+  labels:
+    app: bookmarks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bookmarks
+  template:
+    metadata:
+      labels:
+        app: bookmarks
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-internet: allow
+    spec:
+      containers:
+        - name: bookmarks
+          image: ghcr.io/drosocode/bookmarks:latest
+          resources:
+            requests:
+              memory: 2G
+          ports:
+            - name: web
+              containerPort: 9000
+          env:
+            - name: BM_USER_HEADER
+              value: Remote-User
+            - name: BM_GROUP_HEADER
+              value: Remote-Groups
+            - name: BM_NAME_HEADER
+              value: Remote-Name
+            - name: BM_ALLOWED_GROUPS
+              value: rss
+            - name: BM_TRUSTED_SOURCES
+              value: 0.0.0.0/0
+            - name: BM_REGISTRATION
+              value: "true"
+            - name: BM_CACHE
+              value: /cache
+            - name: BM_DB_HOST
+              value: postgres.storage.svc.cluster.local
+            - name: BM_DB_USER
+              value: bookmarks
+            - name: BM_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookmarks-secrets
+                  key: POSTGRES_PASSWORD
+            - name: BM_DB_PORT
+              value: "5432"
+            - name: BM_DB_NAME
+              value: bookmarks
+          volumeMounts:
+            - mountPath: /cache
+              name: data
+              readOnly: false
+            - name: chromium
+              readOnly: false
+              mountPath: /root/.cache/ms-playwright
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bookmarks-data
+        - name: chromium
+          persistentVolumeClaim:
+            claimName: bookmarks-chromium
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookmarks
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 9000
+  selector:
+    app: bookmarks
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: bookmarks
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`bm.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: bookmarks
+          port: 9000
+  tls:
+    secretName: REDACTED-cert
+# postgres.storage.svc.cluster.local:5432

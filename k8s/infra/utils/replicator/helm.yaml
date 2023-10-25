@@ -1,0 +1,25 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: replicator
+  namespace: kube-system
+spec:
+  interval: 24h
+  url: https://helm.mittwald.de
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: replicator
+  namespace: kube-system
+spec:
+  chart:
+    spec:
+      chart: kubernetes-replicator
+      sourceRef:
+        kind: HelmRepository
+        name: replicator
+      version: '2.8.x'
+  interval: 1h
+  targetNamespace: kube-system

@@ -1,0 +1,49 @@
+- name: Setup nfs
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Include sops passwords
+      community.sops.load_vars:
+        file: ./secrets/passwords.yaml
+        name: user_passwords
+        expressions: evaluate-on-load
+
+    - name: Create groups
+      group:
+        name: "{{ item }}"
+        state: present
+      with_items: "{{ system.groups }}"
+
+    - name: Create users
+      user:
+        name: "{{ item.username }}"
+        password: "{{ user_passwords.get(item.username.lower()) | password_hash('sha512') }}"
+        shell: "{{ item.shell | default('/bin/true',true) }}"
+        groups: "{{ item.groups }}"
+      with_items: "{{ system.users }}"
+
+    - name: Create Samba users if they don't exist yet
+      shell: >
+        set -o nounset -o pipefail -o errexit &&
+        (pdbedit --user={{ item.username }} 2>&1 > /dev/null) \
+        || (echo {{ user_passwords.get(item.username.lower()) }}; echo {{ user_passwords.get(item.username.lower()) }}) \
+        | smbpasswd -s -a {{ item.username }}
+      args:
+        executable: /bin/bash
+      when: item.smb
+      with_items: "{{ system.users }}"
+
+    - name: Create smb user homes directory if it does not exist
+      file:
+        path: "{{ smb.homes.path|replace('\\%S', item.username) }}"
+        state: directory
+        mode: '0755'
+      when: smb.homes.enabled
+      with_items: "{{ system.users }}"
+
+    - name: Enable and restart samba server
+      service:
+        name: smbd
+        state: restarted
+        enabled: true

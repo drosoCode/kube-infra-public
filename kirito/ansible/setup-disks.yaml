@@ -1,0 +1,87 @@
+- name: Setup Disks
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Mount devices by UUID
+      mount:
+        path: "/srv/{{ item }}"
+        src: "UUID={{ item }}"
+        fstype: ext4
+        # opts: noatime
+        state: mounted
+      with_items: "{{ (data_disk_uuid.values() | list) + (parity_disk_uuid.values() | list) }}"
+  
+    - name: Mount additionnal devices by UUID
+      mount:
+        path: "{{ item.path }}"
+        src: "UUID={{ item.uuid }}"
+        fstype: ext4
+        # opts: noatime
+        state: mounted
+      with_items: "{{ mounted_disk_uuid }}"
+
+    - name: Install snapraid
+      apt:
+        update_cache: true
+        name: snapraid
+        state: present
+        # state: latest
+
+    - name: Configure snapraid
+      template:
+        src: "templates/snapraid.conf.j2"
+        dest: "/etc/snapraid.conf"
+
+    - name: Install mergerfs
+      apt:
+        name: mergerfs
+        state: present
+
+    - name: Mount mergerfs
+      become: true
+      vars:
+        paths: "{{ ['/srv/'] | product(data_disk_uuid.values()) | map('join') | list }}"
+        paths_req: "{{ ['x-systemd.requires='] | product(paths) | map('join') | list }}"
+      mount:
+        fstype: fuse.mergerfs
+        src: "{{ ':'.join(paths) }}"
+        path: /srv/data
+        opts: category.create=epmfs,minfreespace=500M,fsname=data:cd180ebe-5d03-4067-a7ae-2c70a9f44aef,defaults,allow_other,cache.files=off,use_ino,{{ ','.join(paths_req) }}
+        state: mounted
+
+    - name: Install hd-idle
+      apt:
+        name: hd-idle
+        state: present
+
+    - name: Configure hd-idle
+      template:
+        src: "templates/hd-idle.j2"
+        dest: "/etc/default/hd-idle"
+
+    - name: Enable and restart hd-idle
+      service:
+        name: hd-idle
+        state: restarted
+        enabled: true
+
+    - name: Cron snapraid sync
+      cron:
+        name: snapraid sync
+        day: "1"
+        minute: "0"
+        hour: "4"
+        user: root
+        job: "snapraid sync"
+        cron_file: snapraid
+
+    - name: Cron snapraid scrub
+      cron:
+        name: snapraid scrub
+        day: "2"
+        minute: "0"
+        hour: "3"
+        user: root
+        job: "snapraid scrub -p 100 -o 0"
+        cron_file: snapraid

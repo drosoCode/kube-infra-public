@@ -1,0 +1,22 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: discord-musebot
+  labels:
+    app: discord-musebot
+spec:
+  selector:
+    matchLabels:
+      app: discord-musebot
+  template:
+    metadata:
+      labels:
+        app: discord-musebot
+        np-internet: allow
+    spec:
+      containers:
+        - name: discord-musebot
+          image: codetheweb/muse:latest
+          envFrom:
+            - secretRef:
+                name: discord-musebot-secrets

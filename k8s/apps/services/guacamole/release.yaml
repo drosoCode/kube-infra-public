@@ -1,0 +1,95 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: guacamole
+  labels:
+    app: guacamole
+spec:
+  selector:
+    matchLabels:
+      app: guacamole
+  template:
+    metadata:
+      labels:
+        app: guacamole
+        np-ingress-controller-web: allow
+        np-mysql: allow
+        np-local-lan: allow
+        np-local-server: allow
+    spec:
+      containers:
+        - name: guacamole
+          image: guacamole/guacamole:1.5.3
+          ports:
+            - name: web
+              containerPort: 8080
+          env:
+            - name: HEADER_ENABLED
+              value: "true"
+            - name: HTTP_AUTH_HEADER
+              value: Remote-User
+            - name: HTTP_AUTH_HEADER_GROUP
+              value: Remote-Group
+            - name: MYSQL_AUTO_CREATE_ACCOUNTS
+              value: "true"
+            - name: GUACD_HOSTNAME
+              value: localhost
+            - name: MYSQL_DATABASE
+              value: guacamole
+            - name: MYSQL_HOSTNAME
+              value: mysql.storage.svc.cluster.local
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: guacamole-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: guacamole-secrets
+                  key: MYSQL_PASSWORD
+        - name: guacd
+          image: guacamole/guacd:1.5.3       
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guacamole
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: guacamole
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: guacamole-redir
+spec:
+  addPrefix:
+    prefix: /guacamole
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: guacamole
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`remote.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: guacamole-redir
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: guacamole
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

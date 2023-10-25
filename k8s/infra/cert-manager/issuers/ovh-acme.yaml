@@ -1,0 +1,55 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ovh-le-staging
+  namespace: cert-manager
+spec:
+  acme:
+    email: contact@REDACTED
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: ovh-le-staging-account-key
+    solvers:
+      - dns01:
+          webhook:
+            solverName: ovh
+            groupName: droso-ovh
+            config:
+              endpoint: ovh-eu
+              applicationKeyRef:
+                name: ovh-secrets
+                key: applicationKey
+              applicationSecretRef:
+                name: ovh-secrets
+                key: applicationSecret
+              consumerKeyRef:
+                name: ovh-secrets
+                key: consumerKey
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ovh-le-prod
+  namespace: cert-manager
+spec:
+  acme:
+    email: contact@REDACTED
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: ovh-le-prod-account-key
+    solvers:
+      - dns01:
+          webhook:
+            solverName: ovh
+            groupName: droso-ovh
+            config:
+              endpoint: ovh-eu
+              applicationKeyRef:
+                name: ovh-secrets
+                key: applicationKey
+              applicationSecretRef:
+                name: ovh-secrets
+                key: applicationSecret
+              consumerKeyRef:
+                name: ovh-secrets
+                key: consumerKey

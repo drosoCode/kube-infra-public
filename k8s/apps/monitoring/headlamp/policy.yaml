@@ -1,0 +1,11 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-headlamp-apiserver-out
+spec:
+  endpointSelector:
+    matchLabels:
+      app: headlamp
+  egress:
+  - toEntities:
+    - cluster

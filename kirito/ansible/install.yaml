@@ -1,0 +1,8 @@
+---
+- import_playbook: setup-disks.yaml
+- import_playbook: setup-nfs.yaml
+- import_playbook: setup-smb.yaml
+- import_playbook: setup-users.yaml
+- import_playbook: setup-monitoring.yaml
+- import_playbook: setup-rsyncd.yaml
+- import_playbook: setup-backup.yaml

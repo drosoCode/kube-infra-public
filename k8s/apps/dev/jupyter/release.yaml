@@ -1,0 +1,85 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: jupyter-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: jupyter
+  labels:
+    app: jupyter
+spec:
+  selector:
+    matchLabels:
+      app: jupyter
+  template:
+    metadata:
+      labels:
+        app: jupyter
+        np-ingress-controller-web: allow
+        np-internet: allow # for cloning
+    spec:
+      containers:
+        - name: jupyter
+          image: jupyter/minimal-notebook:latest
+          args: 
+            - jupyter
+            - notebook 
+            - "--ip"
+            - "*"
+            - --NotebookApp.token
+            - "''"
+            - --NotebookApp.password
+            - "''"
+          ports:
+            - name: web
+              containerPort: 8888
+          env:
+            - name: JUPYTER_PORT
+              value: "8888"
+          volumeMounts:
+          - name: jupyter-data
+            mountPath: /home/jovyan/work
+      volumes:
+      - name: jupyter-data
+        persistentVolumeClaim:
+          claimName: jupyter-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyter
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8888
+  selector:
+    app: jupyter
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: jupyter
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`jupyter.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: jupyter
+          port: 8888
+  tls:
+    secretName: REDACTED-cert

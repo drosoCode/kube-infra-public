@@ -1,0 +1,22 @@
+pid file = /var/run/rsyncd.pid
+lock file = /var/run/rsync.lock
+log file = /var/log/rsync.log
+port = 873
+
+{% if rsyncd.enabled %}
+{% for i in rsyncd.shares -%}
+[{{ i.name }}]
+path = {{ i.path }}
+read only = {{ i.read_only|default(true, false) }}
+use chroot = {{ i.use_chroot|default(true, false) }}
+timeout = 300
+{% if i.users|length > 0 %}
+auth users = {{ i.users|join(",") }}
+secrets file = /etc/rsyncd.secrets
+{% endif %}
+{% if i.uid %}uid = {{ i.uid }}{% endif %}
+
+{% if i.gid %}gid = {{ i.gid }}{% endif %}
+
+{% endfor %}
+{% endif %}

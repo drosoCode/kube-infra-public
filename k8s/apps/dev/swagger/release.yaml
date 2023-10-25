@@ -1,0 +1,53 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: swagger
+  labels:
+    app: swagger
+spec:
+  selector:
+    matchLabels:
+      app: swagger
+  template:
+    metadata:
+      labels:
+        app: swagger
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: swagger
+          image: swaggerapi/swagger-editor
+          ports:
+            - name: web
+              containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: swagger
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: swagger
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: swagger
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`swagger.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: swagger
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

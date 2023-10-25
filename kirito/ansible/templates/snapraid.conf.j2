@@ -1,0 +1,27 @@
+autosave 0
+
+{% for name, uuid in data_disk_uuid.items() -%}
+#####################################################################
+# Disk: {{ name }}
+content /srv/{{ uuid }}/snapraid.content
+disk {{ name }} /srv/{{ uuid }}
+{% endfor %}
+
+{% for name, uuid in parity_disk_uuid.items() -%}
+#####################################################################
+# Disk: {{ name }}
+{% if loop.index == 1 %}
+parity /srv/{{ uuid }}/snapraid.parity
+{% else %}
+{{ loop.index }}-parity /srv/{{ uuid }}/snapraid.{{ loop.index }}-parity
+{% endif %}
+{% endfor %}
+
+exclude *.unrecoverable
+exclude lost+found/
+exclude aquota.user
+exclude aquota.group
+exclude tmp/
+exclude .content
+exclude *.bak
+exclude /snapraid.conf*

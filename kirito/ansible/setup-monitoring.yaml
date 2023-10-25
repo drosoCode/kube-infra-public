@@ -1,0 +1,42 @@
+- name: Setup monitoring
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Install prometheus exporter
+      apt:
+        name: prometheus-node-exporter
+        state: latest
+      when: monitoring.enabled
+
+    - name: Configure prometheus exporter
+      template:
+        src: "templates/prometheus-node-exporter.j2"
+        dest: "/etc/default/prometheus-node-exporter"
+      when: monitoring.enabled
+
+    - name: Enable and restart prometheus exporter
+      service:
+        name: prometheus-node-exporter
+        state: restarted
+        enabled: true
+      when: monitoring.enabled
+
+    - name: Install rsyslog
+      apt:
+        name: rsyslog
+        state: latest
+      when: remote_logging.enabled
+  
+    - name: Configure rsyslog
+      template:
+        src: "templates/rsyslog.conf.j2"
+        dest: "/etc/rsyslog.conf"
+      when: remote_logging.enabled
+
+    - name: Enable and restart rsyslog server
+      service:
+        name: rsyslog
+        state: restarted
+        enabled: true
+      when: remote_logging.enabled

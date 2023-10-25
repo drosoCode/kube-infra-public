@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+data:
+  server.conf: |-
+    include ./auth.conf
+    listen: 0.0.0.0:4222
+    server_name: mqtt1
+    jetstream {
+      store_dir: /data/jetstream
+    }
+    mqtt {
+      listen: 0.0.0.0:1883
+    }

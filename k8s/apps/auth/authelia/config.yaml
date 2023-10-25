@@ -1,0 +1,316 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authelia-config
+  namespace: auth
+data:
+  configuration.yaml: |
+    ---
+    theme: dark
+    default_redirection_url: https://REDACTED/
+
+    ##
+    ## Server Configuration
+    ##
+    server:
+      host: 0.0.0.0
+      port: 9091
+      path: ""
+      read_buffer_size: 4096
+      write_buffer_size: 4096
+      enable_pprof: false
+      enable_expvars: false
+      disable_healthcheck: false
+      tls:
+        key: ""
+        certificate: ""
+
+    ##
+    ## Log Configuration
+    ##
+    log:
+      level: debug
+
+    ##
+    ## Duo Push API Configuration
+    ##
+    duo_api:
+      hostname: api-c9edf1e8.duosecurity.com
+      integration_key: REDACTED
+
+    ##
+    ## Authentication Backend Provider Configuration
+    ##
+    authentication_backend:
+      disable_reset_password: false
+      refresh_interval: 5m
+
+      ##
+      ## LDAP (Authentication Provider)
+      ##
+      ldap:
+        implementation: custom
+        url: ldap://ldap.auth.svc.cluster.local
+        timeout: 5s
+        start_tls: false
+        tls:
+          skip_verify: false
+          minimum_version: TLS1.2
+
+        base_dn: dc=REDACTED,dc=net
+        username_attribute: uid
+        additional_users_dn: ou=people
+        users_filter: (&({username_attribute}={input})(objectClass=person))
+        additional_groups_dn: ou=services
+        groups_filter: (&(uniqueMember={dn})(objectClass=groupOfUniqueNames))
+        user: cn=authelia,ou=apps,dc=REDACTED,dc=net
+
+    ##
+    ## Notification Provider
+    ##
+    notifier:
+      disable_startup_check: true
+      smtp:
+        host: mail.REDACTED
+        port: 587
+        timeout: 5s
+        username: auth@REDACTED
+        sender: auth@REDACTED
+        identifier: localhost
+        subject: "[Authelia] {title}"
+        startup_check_address: mouglon@REDACTED
+        disable_require_tls: false
+        disable_html_emails: false
+        tls:
+          skip_verify: true
+          minimum_version: TLS1.2
+
+    ##
+    ## Regulation Configuration
+    ##
+    regulation:
+      max_retries: 3
+      find_time: 2m
+      ban_time: 5m
+
+    ###############################################################################
+    #                           Authelia Configuration                            #
+    ###############################################################################
+
+    ##
+    ## TOTP Configuration
+    ##
+    totp:
+      issuer: droso
+      period: 30
+      skew: 1
+
+    ##
+    ## Access Control Configuration
+    ##
+    access_control:
+      default_policy: deny
+
+      networks:
+        - name: internal
+          networks:
+            - 172.0.0.0/8
+
+      rules:
+        # allow access from docker network
+        - domain: "*.REDACTED"
+          policy: bypass
+          networks:
+            - internal
+
+        - domain: "torrent.REDACTED"
+          policy: bypass
+          networks:
+            - internal
+
+        - domain: "torrent.REDACTED"
+          policy: one_factor
+          subject: "group:downloading"
+
+        - domain: "hyperion.REDACTED"
+          policy: two_factor
+          subject: "group:home-admin"
+
+        - domain: "netbox.REDACTED"
+          policy: two_factor
+          subject: "group:network"
+
+        - domain: "zigbee.REDACTED"
+          policy: two_factor
+          subject: "group:home-admin"
+
+        - domain: "deemix.REDACTED"
+          policy: one_factor
+          subject: "group:downloading"
+
+        - domain: "esphome.REDACTED"
+          policy: two_factor
+          subject: "group:home-admin"
+
+        - domain: "swagger.REDACTED"
+          policy: one_factor
+          subject: "group:devtools"
+
+        - domain: "hoppscotch.REDACTED"
+          policy: one_factor
+          subject: "group:devtools"
+
+        - domain: "cyberchef.REDACTED"
+          policy: one_factor
+          subject: "group:devtools"
+
+        - domain: "adminer.REDACTED"
+          policy: one_factor
+          subject: "group:devtools"
+
+        - domain: "status.REDACTED"
+          policy: two_factor
+          subject: "group:monitoring-admin"
+
+        - domain: "traefik.REDACTED"
+          policy: two_factor
+          subject: "group:monitoring-admin"
+
+        - domain: "ipblocker.REDACTED"
+          policy: two_factor
+          subject: "group:network"
+
+        - domain: "prom.REDACTED"
+          policy: two_factor
+          subject: "group:monitoring-admin"
+
+        - domain: "nms.REDACTED"
+          policy: two_factor
+          subject: "group:monitoring,group:monitoring-admin"
+
+        - domain: "code.REDACTED"
+          policy: two_factor
+          subject: "group:devtools"
+
+        - domain: "remote.REDACTED"
+          resources:
+              - "^/wol.*$"
+          policy: two_factor
+          subject: "user:thomas"
+
+        - domain: "remote.REDACTED"
+          policy: two_factor
+          subject: "group:guacamole"
+
+        - domain: "jupyter.REDACTED"
+          policy: two_factor
+          subject: "group:devtools"
+
+        - domain: "rss.REDACTED"
+          policy: two_factor
+          subject: "group:rss"
+
+        - domain: "cloud.REDACTED"
+          resources:
+              - "^/static.*$"
+              - "^/share.*$"
+              - "^/api/public.*$"
+          policy: bypass
+
+        - domain: "cloud.REDACTED"
+          policy: two_factor
+          subject: "group:filebrowser"
+
+        - domain: "cloud.REDACTED"
+          policy: bypass
+          networks:
+            - internal
+
+        - domain: "bm.REDACTED"
+          resources:
+              - "^/manifest.json"
+              - "^/icons/.*$"
+          policy: bypass
+
+        - domain: "bm.REDACTED"
+          policy: two_factor
+          subject: "group:rss"
+
+        - domain: "hass.REDACTED"
+          resources:
+              - "^/api.*"
+              - "^/auth/token.*"
+              - "^/.external_auth=."
+              - "^/service_worker.js"
+              - "^/static.*"
+              - "^/local.*"
+              - "^/hacsfiles.*"
+              - "^/frontend_latest.*"
+          policy: bypass
+
+        - domain: "hass.REDACTED"
+          policy: two_factor
+          subject: "group:homeassistant"
+
+        - domain: "photoprism.REDACTED"
+          policy: two_factor
+          subject: "user:thomas"
+
+        - domain: "REDACTED"
+          policy: two_factor
+          resources:
+              - "^/admin.*"
+
+        - domain: "nats.REDACTED"
+          policy: two_factor
+          subject: "group:home-admin"
+
+    ##
+    ## Session Provider Configuration
+    ##
+    session:
+      name: authelia_session
+      domain: REDACTED
+      same_site: lax
+      expiration: 1h
+      inactivity: 5m
+      remember_me_duration: 1M
+
+      ##
+      ## Redis Provider
+      ##
+      redis:
+        host: localhost
+        port: 6379
+        database_index: 0
+        maximum_active_connections: 8
+        minimum_idle_connections: 0
+    ##
+    ## Storage Provider Configuration
+    ##
+    storage:
+      ##
+      ## PostgreSQL (Storage Provider)
+      ##
+      postgres:
+        host: postgres.storage.svc.cluster.local
+        port: 5432
+        database: authelia
+        username: authelia
+        timeout: 5s
+
+    #(&(objectClass=person)(memberOf=CN=gitea_user,OU=groups,dc=REDACTED,dc=net)(uid=thomas))
+    #(&(uid=thomas)(objectClass=posixAccount))
+    #ldapsearch -h openldap -x -b "ou=people,dc=REDACTED,dc=net" -s sub "(&(objectClass=person)(memberOf=CN=gitea_user,OU=groups,dc=REDACTED,dc=net)(uid=thomas))" givenName memberOf 
+
+    telemetry:
+      metrics:
+        enabled: true
+        address: "tcp://0.0.0.0:9959"
+        buffers:
+          read: 4096
+          write: 4096
+        timeouts:
+          read: 2s
+          write: 2s
+          idle: 30s

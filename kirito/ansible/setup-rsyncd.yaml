@@ -1,0 +1,40 @@
+- name: Setup rsync server
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Install rsync
+      apt:
+        name: rsync
+        state: present
+        # state: latest
+
+    - name: Configure rsync
+      template:
+        src: "templates/rsyncd.conf.j2"
+        dest: "/etc/rsyncd.conf"
+
+    - name: Create rsync secrets
+      template:
+        src: "templates/rsyncd.conf.j2"
+        dest: "/etc/rsyncd.conf"
+
+    - name: Set rsync secret perms
+      ansible.builtin.file:
+        path: /etc/rsyncd.secrets
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Write rsync secrets
+      template:
+        src: templates/file.j2
+        dest: /etc/rsyncd.secrets
+      vars:
+        file_path: secrets/rsyncd.secrets
+
+    - name: Enable and restart rsync server
+      service:
+        name: rsync
+        state: restarted
+        enabled: true

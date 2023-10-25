@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nats-mqtt-in
+spec:
+  podSelector:
+    matchLabels:
+      app: nats
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: home
+          podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - zigbee2mqtt
+                  - hass
+      ports:
+        - protocol: TCP
+          port: mqtt

@@ -1,0 +1,49 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-whatsapp
+  labels:
+    app: matrix-whatsapp
+spec:
+  selector:
+    matchLabels:
+      app: matrix-whatsapp
+  template:
+    metadata:
+      labels:
+        app: matrix-whatsapp
+        np-matrix: allow
+        np-internet: allow
+        np-postgres: allow
+    spec:
+      containers:
+        - name: matrix-whatsapp
+          image: dock.mau.dev/mautrix/whatsapp:latest
+          ports:
+            - name: appservice
+              containerPort: 29318
+          volumeMounts:
+            - mountPath: /data/config.yaml
+              subPath: config.yaml
+              name: matrix-whatsapp-config
+              readOnly: true
+            - mountPath: /data/registration.yaml
+              subPath: registration.yaml
+              name: matrix-whatsapp-config
+              readOnly: true
+      volumes:
+        - name: matrix-whatsapp-config
+          secret:
+            secretName: matrix-whatsapp-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-whatsapp
+spec:
+  ports:
+    - protocol: TCP
+      name: appservice
+      port: 29318
+  selector:
+    app: matrix-whatsapp

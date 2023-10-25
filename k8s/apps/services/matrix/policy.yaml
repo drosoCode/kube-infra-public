@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-matrix-bridge-in
+spec:
+  podSelector:
+    matchLabels:
+      app: matrix
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            np-matrix: allow
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: services
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-matrix-bridge-out
+spec:
+  podSelector:
+    matchLabels:
+      np-matrix: allow
+  policyTypes:
+    - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: services
+      podSelector:
+        matchLabels:
+          app: matrix

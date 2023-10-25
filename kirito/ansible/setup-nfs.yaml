@@ -1,0 +1,28 @@
+- name: Setup nfs
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Install nfs server
+      apt:
+        name: nfs-kernel-server
+        state: present
+        # state: latest
+
+    - name: Create export directory if it does not exist
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: '0755'
+      with_items: "{{ nfs }}"
+
+    - name: Configure nfs
+      template:
+        src: "templates/exports.j2"
+        dest: "/etc/exports"
+
+    - name: Enable and restart nfs server
+      service:
+        name: nfs-server
+        state: restarted
+        enabled: true

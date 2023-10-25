@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zigbee2mqtt-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: zigbee2mqtt
+  labels:
+    app: zigbee2mqtt
+spec:
+  selector:
+    matchLabels:
+      app: zigbee2mqtt
+  template:
+    metadata:
+      labels:
+        app: zigbee2mqtt
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: zigbee2mqtt
+          image: koenkk/zigbee2mqtt
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+            - name: zigbee2mqtt-data
+              mountPath: /app/data
+          resources:
+            limits:
+              squat.ai/zigbee: "1"
+          env:
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_SERVER
+              value: mqtt://nats.home.svc.cluster.local
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC
+              value: zigbee2mqtt
+            - name: ZIGBEE2MQTT_CONFIG_SERIAL_PORT
+              value: /dev/serial/by-id/usb-Texas_Instruments_XDS110__03.00.00.18__Embed_with_CMSIS-DAP_L1100GQ0-if00
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: zigbee2mqtt-secrets
+                  key: ZIGBEE2MQTT_CONFIG_MQTT_USER
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zigbee2mqtt-secrets
+                  key: ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD
+      volumes:
+        - name: zigbee2mqtt-data
+          persistentVolumeClaim:
+            claimName: zigbee2mqtt-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zigbee2mqtt
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: zigbee2mqtt
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: zigbee2mqtt
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`zigbee.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: zigbee2mqtt
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

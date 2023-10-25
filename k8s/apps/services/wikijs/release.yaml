@@ -1,0 +1,72 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: wikijs
+  labels:
+    app: wikijs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wikijs
+  template:
+    metadata:
+      labels:
+        app: wikijs
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-internal: allow # for oidc
+    spec:
+      containers:
+        - name: wikijs
+          image: requarks/wiki:2
+          ports:
+            - name: web
+              containerPort: 3000
+          env:
+            - name: DB_TYPE
+              value: postgres
+            - name: DB_HOST
+              value: postgres.storage.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: wikijs
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: wikijs-secrets
+                  key: DB_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: wikijs-secrets
+                  key: DB_PASS
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wikijs
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 3000
+  selector:
+    app: wikijs
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: wikijs
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`wiki.REDACTED`)
+      kind: Rule
+      services:
+        - name: wikijs
+          port: 3000
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nats-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: nats
+  labels:
+    app: nats
+spec:
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+        np-ingress-controller-web: allow
+        np-metrics: allow
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "7777"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.10-alpine
+          args:
+            - "-c"
+            - "/config/server.conf"
+          ports:
+            - name: clients
+              containerPort: 4222
+            - name: mqtt
+              containerPort: 1883
+            - name: monitoring
+              containerPort: 8222
+          volumeMounts:
+            - name: nats-config
+              mountPath: /config/server.conf
+              subPath: server.conf
+            - name: nats-config-auth
+              mountPath: /config/auth.conf
+              subPath: auth.conf
+            - name: nats-data
+              mountPath: /data/jetstream
+
+        - name: exporter
+          image: natsio/prometheus-nats-exporter:latest
+          args:
+            - "-varz"
+            - "http://localhost:8222"
+          ports:
+            - name: metrics
+              containerPort: 7777
+
+      volumes:
+        - name: nats-data
+          persistentVolumeClaim:
+            claimName: nats-data
+        - name: nats-config
+          configMap:
+            name: nats-config
+        - name: nats-config-auth
+          secret:
+            secretName: nats-config-auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+    - protocol: TCP
+      name: mqtt
+      port: 1883
+  selector:
+    app: nats
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: nats-mqtt-secure
+spec:
+  entryPoints:
+    - mqtts
+  routes:
+    - match: HostSNI(`mqtt.REDACTED`)
+      services:
+        - name: nats
+          port: 1883
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,52 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-admin
+  labels:
+    app: matrix-admin
+spec:
+  replicas: 0 # disabled
+  selector:
+    matchLabels:
+      app: matrix-admin
+  template:
+    metadata:
+      labels:
+        app: matrix-admin
+        np-matrix: allow
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: matrix-admin
+          image: awesometechnologies/synapse-admin
+          ports:
+            - name: web
+              containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-admin
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: matrix-admin
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: matrix-admin
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`matrixadm.REDACTED`)
+      kind: Rule
+      services:
+        - name: matrix-admin
+          port: 80
+  tls:
+    secretName: REDACTED-cert

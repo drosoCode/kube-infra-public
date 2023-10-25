@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: matrix-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix
+  labels:
+    app: matrix
+spec:
+  selector:
+    matchLabels:
+      app: matrix
+  template:
+    metadata:
+      labels:
+        app: matrix
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-internet: allow # for federation
+        np-metrics: allow
+        np-internal: allow # for oidc
+      annotations:
+        prometheus.io/path: "/_synapse/metrics"
+        prometheus.io/port: "9000"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: matrix
+          image: matrixdotorg/synapse:latest
+          ports:
+            - name: web
+              containerPort: 8008
+            - name: metrics
+              containerPort: 9000
+          env:
+            - name: SYNAPSE_CONFIG_DIR
+              value: /data
+            - name: SYNAPSE_CONFIG_PATH
+              value: /data/homeserver.yaml
+            - name: UID
+              value: "1000"
+            - name: GID
+              value: "1000"
+            - name: TZ
+              value: Europe/Paris
+          volumeMounts:
+            - mountPath: /data/media_store
+              name: matrix-data
+            - mountPath: /data/matrix.REDACTED.signing.key
+              subPath: matrix.REDACTED.signing.key
+              name: matrix-config
+              readOnly: true
+            - mountPath: /data/matrix.REDACTED.log.config
+              subPath: matrix.REDACTED.log.config
+              name: matrix-config
+              readOnly: true
+            - mountPath: /data/homeserver.yaml
+              subPath: homeserver.yaml
+              name: matrix-config
+              readOnly: true
+              # bridges config
+            - mountPath: /data/appservices/sms/registration.yaml
+              subPath: registration.yaml
+              name: matrix-sms-config
+            - mountPath: /data/appservices/whatsapp/registration.yaml
+              subPath: registration.yaml
+              name: matrix-whatsapp-config
+            - mountPath: /data/appservices/instagram/registration.yaml
+              subPath: registration.yaml
+              name: matrix-instagram-config
+
+        - name: redis
+          image: redis:alpine
+      volumes:
+        - name: matrix-data
+          persistentVolumeClaim:
+            claimName: matrix-data
+        - name: matrix-config
+          secret:
+            secretName: matrix-config
+        - name: matrix-sms-config
+          secret:
+            secretName: matrix-sms-config
+        - name: matrix-whatsapp-config
+          secret:
+            secretName: matrix-whatsapp-config
+        - name: matrix-instagram-config
+          secret:
+            secretName: matrix-instagram-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8008
+  selector:
+    app: matrix
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: matrix
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`matrix.REDACTED`) || (Host(`REDACTED`) && PathPrefix(`/_matrix/`))
+      kind: Rule
+      services:
+        - name: matrix
+          port: 8008
+  tls:
+    secretName: REDACTED-cert

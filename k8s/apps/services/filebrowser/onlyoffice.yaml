@@ -1,0 +1,64 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: onlyoffice
+  labels:
+    app: onlyoffice
+spec:
+  selector:
+    matchLabels:
+      app: onlyoffice
+  template:
+    metadata:
+      labels:
+        app: onlyoffice
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: onlyoffice
+          image: onlyoffice/documentserver
+          ports:
+            - name: web
+              containerPort: 80
+          envFrom:
+            - secretRef:
+                name: onlyoffice-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: onlyoffice
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: onlyoffice
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: onlyoffice-headers
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: https
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: onlyoffice
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`oo.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: onlyoffice-headers
+      services:
+        - name: onlyoffice
+          port: 80
+  tls:
+    secretName: REDACTED-cert

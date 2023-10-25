@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-hyperion-hass-in
+spec:
+  podSelector:
+    matchLabels:
+      app: hyperion
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: hass
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: home
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-hyperion-world-in
+spec:
+  endpointSelector:
+    matchLabels:
+      app: hyperion
+  ingress:
+  - fromEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "19400"
+        protocol: TCP
+      - port: "19445"
+        protocol: TCP

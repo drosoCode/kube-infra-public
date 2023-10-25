@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: server-data
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500M
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: server
+  labels:
+    app: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+        np-ingress-controller-web: allow
+    spec:
+      containers:
+        - name: server
+          image: git.REDACTED/droso/server:latest
+          ports:
+            - name: web
+              containerPort: 80
+          volumeMounts:
+            - mountPath: /var/www
+              name: server-data
+              readOnly: true
+      volumes:
+        - name: server-data
+          persistentVolumeClaim:
+            claimName: server-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: server
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: dashboard-redir
+spec:
+  addPrefix:
+    prefix: /admin/dashboard
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: server
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`REDACTED`)
+      kind: Rule
+      services:
+        - name: server
+          port: 80
+    - match: Host(`home.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: dashboard-redir
+      services:
+        - name: server
+          port: 80
+    - match: Host(`REDACTED`) && PathPrefix(`/admin`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: server
+          port: 80
+  tls:
+    secretName: REDACTED-cert
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: server-http
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`10.10.100.1`)
+      kind: Rule
+      services:
+        - name: server
+          port: 80

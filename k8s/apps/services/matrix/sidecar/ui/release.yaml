@@ -1,0 +1,61 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: matrix-ui
+  labels:
+    app: matrix-ui
+spec:
+  selector:
+    matchLabels:
+      app: matrix-ui
+  template:
+    metadata:
+      labels:
+        app: matrix-ui
+        np-matrix: allow
+        np-ingress-controller-web: allow
+        #np-internet: allow # ?
+    spec:
+      containers:
+        - name: matrix-ui
+          image: vectorim/element-web:latest
+          ports:
+            - name: web
+              containerPort: 80
+          volumeMounts:
+            - mountPath: /app/config.json
+              subPath: config.json
+              name: matrix-ui-config
+              readOnly: true
+      volumes:
+        - name: matrix-ui-config
+          secret:
+            secretName: matrix-ui-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-ui
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+  selector:
+    app: matrix-ui
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: matrix-ui
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`riot.REDACTED`)
+      kind: Rule
+      services:
+        - name: matrix-ui
+          port: 80
+  tls:
+    secretName: REDACTED-cert

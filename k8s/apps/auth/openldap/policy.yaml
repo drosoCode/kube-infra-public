@@ -1,0 +1,22 @@
+# openldap <- authelia (here)
+# phpldapadmin <- traefik
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ldap-in
+  namespace: auth
+spec:
+  podSelector:
+    matchLabels:
+      app: openldap
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              np-ldap: allow
+          namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: ldap

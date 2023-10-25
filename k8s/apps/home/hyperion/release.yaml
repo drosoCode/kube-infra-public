@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hyperion-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: hyperion
+  labels:
+    app: hyperion
+spec:
+  selector:
+    matchLabels:
+      app: hyperion
+  template:
+    metadata:
+      labels:
+        app: hyperion
+        np-ingress-controller-web: allow
+        np-local-iot: allow # to connect to esp
+    spec:
+      containers:
+        - name: hyperion
+          image: git.REDACTED/droso/hyperion:latest
+          ports:
+            - name: web
+              containerPort: 8090
+            - name: flatbuffers
+              containerPort: 19400
+            - name: jsonapi
+              containerPort: 19444
+            - name: protobuf
+              containerPort: 19445
+          volumeMounts:
+            - name: hyperion-data
+              mountPath: /root/.hyperion
+      volumes:
+        - name: hyperion-data
+          persistentVolumeClaim:
+            claimName: hyperion-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hyperion
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8090
+    - protocol: TCP
+      name: jsonapi
+      port: 19444
+  selector:
+    app: hyperion
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hyperion
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`hyperion.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: hyperion
+          port: 8090
+  tls:
+    secretName: REDACTED-cert
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hyperion-lb
+  annotations:
+    metallb.universe.tf/allow-shared-ip: lan
+spec:
+  ports:
+    - protocol: TCP
+      name: flatbuffers
+      port: 19400
+    - protocol: TCP
+      name: protobuf
+      port: 19445
+  selector:
+    app: hyperion
+  type: LoadBalancer

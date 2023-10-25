@@ -1,0 +1,28 @@
+- name: Setup nfs
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: Install samba server
+      apt:
+        name: samba
+        state: present
+        # state: latest
+
+    - name: Create smb share directory if it does not exist
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: '0755'
+      with_items: "{{ smb.shares }}"
+
+    - name: Configure samba
+      template:
+        src: "templates/smb.conf.j2"
+        dest: "/etc/samba/smb.conf"
+
+    - name: Enable and restart samba server
+      service:
+        name: smbd
+        state: restarted
+        enabled: true

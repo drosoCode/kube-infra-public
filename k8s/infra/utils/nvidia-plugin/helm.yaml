@@ -1,0 +1,38 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: nvidia-plugin
+  namespace: kube-system
+spec:
+  interval: 24h
+  url: https://nvidia.github.io/k8s-device-plugin
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: nvidia-plugin
+  namespace: kube-system
+spec:
+  chart:
+    spec:
+      chart: nvidia-device-plugin
+      sourceRef:
+        kind: HelmRepository
+        name: nvidia-plugin
+      version: '0.14.x'
+  interval: 1h
+  targetNamespace: kube-system
+  values:
+    runtimeClassName: nvidia
+    config:
+      map:
+        default: |-
+          version: v1
+          flags:
+            migStrategy: none
+          sharing:
+            timeSlicing:
+              resources:
+                - name: nvidia.com/gpu
+                  replicas: 10

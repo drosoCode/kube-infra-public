@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5G
+  storageClassName: nfs-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-extensions
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: sonarqube
+  labels:
+    app: sonarqube
+spec:
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+        np-ingress-controller-web: allow
+        np-postgres: allow
+        np-internet: allow # to download extensions
+        np-internal: allow # for oidc
+        np-metrics: allow
+    spec:
+      containers:
+        - name: sonarqube
+          image: sonarqube:10-community
+          resources:
+            limits:
+              cpu: 800m
+              memory: 4Gi
+            requests:
+              cpu: 400m
+              memory: 2Gi
+          ports:
+            - name: web
+              containerPort: 9000
+          env:
+            - name: SONAR_JDBC_URL
+              value: jdbc:postgresql://postgres.storage.svc.cluster.local:5432/sonarqube
+            - name: SONAR_JDBC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-secrets
+                  key: SONAR_JDBC_USERNAME
+            - name: SONAR_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-secrets
+                  key: SONAR_JDBC_PASSWORD
+            - name: SONAR_WEB_SYSTEMPASSCODE
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-secrets
+                  key: SONAR_WEB_SYSTEMPASSCODE
+          volumeMounts:
+            - mountPath: /opt/sonarqube/extensions
+              name: sonarqube-extensions
+            - name: sonarqube-data
+              mountPath: /opt/sonarqube/data
+      volumes:
+        - name: sonarqube-extensions
+          persistentVolumeClaim:
+            claimName: sonarqube-extensions
+        - name: sonarqube-data
+          persistentVolumeClaim:
+            claimName: sonarqube-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 9000
+  selector:
+    app: sonarqube
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: sonarqube
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`sonar.REDACTED`)
+      kind: Rule
+      services:
+        - name: sonarqube
+          port: 9000
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navidrome-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: navidrome
+  labels:
+    app: navidrome
+spec:
+  selector:
+    matchLabels:
+      app: navidrome
+  template:
+    metadata:
+      labels:
+        app: navidrome
+        np-ingress-controller-web: allow
+        np-internet: allow # for scrapers
+    spec:
+      containers:
+        - name: navidrome
+          image: deluan/navidrome:latest
+          ports:
+            - name: web
+              containerPort: 4533
+          volumeMounts:
+            - mountPath: /data
+              name: navidrome-data
+              readOnly: false
+            - mountPath: /music
+              subPath: Thomas/Musique
+              name: nas-user-data
+              readOnly: true
+          env:
+            - name: Spotify.ID
+              valueFrom:
+                secretKeyRef:
+                  name: navidrome-secrets
+                  key: SPOTIFY_ID
+            - name: Spotify.Secret
+              valueFrom:
+                secretKeyRef:
+                  name: navidrome-secrets
+                  key: SPOTIFY_SECRET
+      volumes:
+        - name: nas-user-data
+          persistentVolumeClaim:
+            claimName: nas-user-data-media
+        - name: navidrome-data
+          persistentVolumeClaim:
+            claimName: navidrome-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: navidrome
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 4533
+  selector:
+    app: navidrome
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: navidrome
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`navidrome.REDACTED`)
+      kind: Rule
+      services:
+        - name: navidrome
+          port: 4533
+  tls:
+    secretName: REDACTED-cert

@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zogwine-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: nfs-cache
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: zogwine
+  labels:
+    app: zogwine
+spec:
+  selector:
+    matchLabels:
+      app: zogwine
+  template:
+    metadata:
+      labels:
+        app: zogwine
+        np-ingress-controller-web: allow
+        np-mysql: allow
+        np-local-lan: allow # for players
+        np-internet: allow # for scrapers
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: zogwine
+          image: git.REDACTED/droso/zogwine
+          ports:
+            - name: web
+              containerPort: 8080
+          volumeMounts:
+            - mountPath: /home/server/content
+              name: nas-media-data
+              subPath: Videos/
+              readOnly: true
+            - mountPath: /home/server/out
+              name: zogwine-cache
+              readOnly: false
+            - mountPath: /home/server/zogwine.log
+              name: zogwine-cache
+              subPath: zogwine.log
+              readOnly: false
+            - mountPath: /home/server/config/config.json
+              subPath: config.json
+              name: zogwine-config
+              readOnly: true
+          resources:
+            limits:
+              "nvidia.com/gpu": "1"
+          env:
+            - name: TZ
+              value: Europe/Paris
+          livenessProbe:
+            exec:
+              command:
+              - bash
+              - -c
+              - 'test $(tail /home/server/zogwine.log | grep errors.PoolError | wc -l) -eq 0'
+            initialDelaySeconds: 30
+            periodSeconds: 300
+
+        - name: redis
+          image: redis:alpine
+      volumes:
+        - name: zogwine-cache
+          persistentVolumeClaim:
+            claimName: zogwine-cache
+        - name: nas-media-data
+          persistentVolumeClaim:
+            claimName: nas-media-data-media
+        - name: zogwine-config
+          secret:
+            secretName: zogwine-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zogwine
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8080
+  selector:
+    app: zogwine
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: zogwine
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`loutre.REDACTED`)
+      kind: Rule
+      services:
+        - name: zogwine
+          port: 8080
+  tls:
+    secretName: REDACTED-cert

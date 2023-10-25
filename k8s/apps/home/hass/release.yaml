@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hass-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-docker
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: hass
+  labels:
+    app: hass
+spec:
+  selector:
+    matchLabels:
+      app: hass
+  template:
+    metadata:
+      labels:
+        app: hass
+        np-ingress-controller-web: allow
+        np-mysql: allow
+        np-internet: allow
+        np-local-lan: allow
+        np-local-iot: allow
+    spec:
+      containers:
+        - name: hass
+          image: homeassistant/home-assistant:stable
+          ports:
+            - name: web
+              containerPort: 8123
+          volumeMounts:
+            - name: hass-data
+              mountPath: /config
+            - name: tmp-data
+              mountPath: /media
+              subPath: hass/
+          env:
+            - name: TZ
+              value: Europe/Paris
+
+        - name: whisper
+          image: rhasspy/wyoming-whisper
+          args:
+            - "--model"
+            - "medium-int8"
+            - "--language"
+            - "fr"
+          ports:
+            - name: whisper
+              containerPort: 10300
+          volumeMounts:
+            - name: tmp-data
+              mountPath: /data
+              subPath: whisper/
+
+        - name: piper
+          image: rhasspy/wyoming-piper
+          args:
+            - "--voice"
+            - "fr-siwis-low"
+          ports:
+            - name: piper
+              containerPort: 10200
+          volumeMounts:
+            - name: tmp-data
+              mountPath: /data
+              subPath: piper/
+
+      volumes:
+        - name: hass-data
+          persistentVolumeClaim:
+            claimName: hass-data
+        - name: tmp-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hass
+spec:
+  ports:
+    - protocol: TCP
+      name: web
+      port: 8123
+  selector:
+    app: hass
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hass
+spec:
+  entryPoints:
+    - websecure
+    - https-wan
+  routes:
+    - match: Host(`hass.REDACTED`)
+      kind: Rule
+      middlewares:
+        - name: forwardauth-authelia
+          namespace: auth
+      services:
+        - name: hass
+          port: 8123
+  tls:
+    secretName: REDACTED-cert

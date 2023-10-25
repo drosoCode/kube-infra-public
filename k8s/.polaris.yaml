@@ -1,0 +1,5 @@
+checks:
+  tagNotSpecified: ignore
+  runAsRootAllowed: warning
+  pullPolicyNotAlways: warning
+  privilegeEscalationAllowed: warning
